@@ -1,17 +1,25 @@
-from flask_cors import CORS
-
 from flask import Flask, request, jsonify
+from flask_cors import CORS
 
 app = Flask(__name__)
 CORS(app)
-# Predefined modules by level, specialization, and semester
+
+# Predefined modules by year, specialization, and semester
 MODULES = {
-    "CP": {
+    "CP1": {
         "Semester 1": [
             "Management", "Droit général", "Comptabilité générale", "Micro-économie", "Mathématiques appliquées", "Français & Anglais", "Méthodologie de travail universitaire"
         ],
         "Semester 2": [
             "Marketing", "Droit commercial", "Travaux d’inventaire", "Macro-économie", "Statistiques et Probabilités", "Français & Anglais", "Digital-skills"
+        ]
+    },
+    "CP2": {
+        "Semester 1": [
+            "Commerce et logistique", "Droit des affaires", "Comptabilité de gestion", "Economie internationale", "Mathématiques et décisions financières", "Français & Anglais", "Culture et art skills"
+        ],
+        "Semester 2": [
+            "Théorie des organisations", "Fiscalité de l’entreprise", "Gestion financière", "Economie monétaire et techniques bancaires", "Systèmes d’information et bases de données", "Français & Anglais", "Soft-skills: Développement personnel"
         ]
     },
     "CGE3": {
@@ -31,57 +39,26 @@ MODULES = {
                 "Analyse des données", "Marketing opérationnel", "Etude de marché", "Marketing digital et développement Web", "Algorithmes et Programmation Python", "Français & Anglais", "Responsabilité sociétale"
             ]
         }
+    },
+    "CGE4": {
+        "Gestion": {
+            "Finance": {
+                "Semester 1": ["Management stratégique", "Evaluation des entreprises", "Finance internationale", "Stage d’approfondissement", "Français & Anglais", "Intelligence artificielle"],
+                "Semester 2": ["Simulation de gestion et ERP", "Ingénierie financière", "Audit et gestion des risques financiers", "Stratégies financières", "IA appliquée Fintech", "Français & Anglais", "Employment skills"]
+            },
+            "Audit": {
+                "Semester 1": ["Management stratégique", "Contrôle de gestion avancé", "Audit opérationnel", "Stage d’approfondissement", "Français & Anglais", "Intelligence artificielle"],
+                "Semester 2": ["Simulation de gestion et ERP", "Audit comptable et fiscal", "Audit et optimisation", "Fusions et acquisitions", "IA appliquée ", "Français & Anglais", "Employment skills"]
+            }
+        },
+        "Commerce": {
+            "Marketing": {
+                "Semester 1": ["Management stratégique", "CRM et Branding", "Marketing stratégique", "Stage d’approfondissement", "Français & Anglais", "Digital competences"],
+                "Semester 2": ["ERP Simulation", "Digital marketing avancé", "Marketing analytique", "Merchandising avancé", "Employment Skills"]
+            }
+        }
     }
 }
-
-@app.route('/start', methods=['GET'])
-def start():
-    return jsonify({
-        "message": "Welcome to the Grade Validator App! Please select your year:",
-        "options": ["CP (1st & 2nd Year - Tronc Commun)", "CGE3 (3rd Year)", "CGE4 (4th Year)", "CGE5 (5th Year)"]
-    })
-
-@app.route('/semester', methods=['POST'])
-def semester():
-    data = request.get_json()
-    year = data.get('year')
-
-    if year not in MODULES:
-        return jsonify({"error": "Invalid year. Please choose 'CP', 'CGE3', 'CGE4', or 'CGE5'."}), 400
-
-    if year == "CGE3":
-        return jsonify({
-            "message": "Please select your specialization:",
-            "options": ["Gestion", "Commerce"]
-        })
-
-    return jsonify({
-        "message": "Please select the semester:",
-        "options": ["Semester 1", "Semester 2"]
-    })
-
-@app.route('/modules', methods=['POST'])
-def modules():
-    data = request.get_json()
-    year = data.get('year')
-    semester = data.get('semester')
-    specialization = data.get('specialization', None)
-
-    if year == "CGE3" and specialization not in MODULES[year]:
-        return jsonify({"error": "Invalid specialization for CGE3."}), 400
-
-    try:
-        if specialization:
-            module_list = MODULES[year][specialization][semester]
-        else:
-            module_list = MODULES[year][semester]
-    except KeyError:
-        return jsonify({"error": "Invalid semester or data."}), 400
-
-    return jsonify({
-        "message": "Please enter the grades for the following modules:",
-        "modules": module_list
-    })
 
 @app.route('/validate', methods=['POST'])
 def validate_grades():
@@ -92,69 +69,11 @@ def validate_grades():
     specialization = data.get('specialization', None)
     grades = data.get('grades', {})
 
-    if year == "CGE3" and specialization not in MODULES[year]:
-        return jsonify({"error": "Invalid specialization for CGE3."}), 400
+    # Handle specialization validation
+    if year.startswith('CGE') and specialization not in MODULES[year]:
+        return jsonify({"error": "Invalid specialization."}), 400
 
     try:
-        if specialization:
-            module_list = MODULES[year][specialization][semester]
-        else:
-            module_list = MODULES[year][semester]
+        module_list = MODULES[year]
     except KeyError:
-        return jsonify({"error": "Invalid semester or data."}), 400
-
-    min_eliminatory = 6 if year == "CP" else 8
-    compensation_range = (6, 10) if year == "CP" else (8, 10)
-
-    total_grades = 0
-    validated_modules = []
-    compensatable_modules = []
-    failed_modules = []
-
-    for module in module_list:
-        if module not in grades:
-            return jsonify({"error": f"Missing grades for module: {module}"}), 400
-
-        cc = grades[module].get('cc', 0)
-        exam = grades[module].get('exam', 0)
-        final_grade = (cc * 0.5) + (exam * 0.5)
-
-        if final_grade < min_eliminatory:
-            failed_modules.append(module)
-        elif compensation_range[0] <= final_grade < 10:
-            compensatable_modules.append(module)
-        else:
-            validated_modules.append(module)
-
-        total_grades += final_grade
-
-    average = total_grades / len(module_list)
-    semester_validated = average >= 10 and len(failed_modules) == 0
-
-    honors = None
-    if semester_validated:
-        if average >= 16:
-            honors = "Très bien"
-        elif average >= 14:
-            honors = "Bien"
-        elif average >= 12:
-            honors = "Assez bien"
-        elif average >= 10:
-            honors = "Passable"
-
-    result = {
-        "validated_modules": validated_modules,
-        "compensatable_modules": compensatable_modules,
-        "failed_modules": failed_modules,
-        "average": average,
-        "semester_validated": semester_validated,
-        "honors": honors,
-    }
-
-    return jsonify(result)
-
-import os
-
-if __name__ == '__main__':
-    port = int(os.environ.get("PORT", 10000))  # Render dynamically assigns a port
-    app.run(host="0.0.0.0", port=port, debug=True)
+        return jsonify({"error": "Invalid semester or year."}), 400
