@@ -8,57 +8,49 @@ CORS(app)
 MODULES = {
     "CP1": {
         "Semester 1": [
-            "Management", "Droit général", "Comptabilité générale", "Micro-économie", "Mathématiques appliquées", "Français & Anglais", "Méthodologie de travail universitaire"
+            "Management", "Droit général", "Comptabilité générale", "Micro-économie",
+            "Mathématiques appliquées", "Français & Anglais", "Méthodologie de travail universitaire"
         ],
         "Semester 2": [
-            "Marketing", "Droit commercial", "Travaux d’inventaire", "Macro-économie", "Statistiques et Probabilités", "Français & Anglais", "Digital-skills"
+            "Marketing", "Droit commercial", "Travaux d’inventaire", "Macro-économie",
+            "Statistiques et Probabilités", "Français & Anglais", "Digital-skills"
         ]
     },
     "CP2": {
         "Semester 1": [
-            "Commerce et logistique", "Droit des affaires", "Comptabilité de gestion", "Economie internationale", "Mathématiques et décisions financières", "Français & Anglais", "Culture et art skills"
+            "Commerce et logistique", "Droit des affaires", "Comptabilité de gestion", 
+            "Économie internationale", "Mathématiques et décisions financières", 
+            "Français & Anglais", "Culture et art skills"
         ],
         "Semester 2": [
-            "Théorie des organisations", "Fiscalité de l’entreprise", "Gestion financière", "Economie monétaire et techniques bancaires", "Systèmes d’information et bases de données", "Français & Anglais", "Soft-skills: Développement personnel"
+            "Théorie des organisations", "Fiscalité de l’entreprise", "Gestion financière",
+            "Économie monétaire et techniques bancaires", "Systèmes d’information et bases de données",
+            "Français & Anglais", "Soft-skills: Développement personnel"
         ]
-    },
-    "CGE3": {
-        "Gestion": {
-            "Semester 1": [
-                "Gestion de la production et qualité", "Supply Chain Management", "Gestion budgétaire et de trésorerie", "Gestion des ressources humaines", "Statistiques appliquées", "Français & Anglais", "Compétences digitales et informatique"
-            ],
-            "Semester 2": [
-                "Analyse des données", "Contrôle de gestion", "Marché des capitaux", "Comptabilité des sociétés", "Algorithmes et Programmation Python", "Français & Anglais", "Responsabilité sociétale"
-            ]
-        },
-        "Commerce": {
-            "Semester 1": [
-                "Gestion de la production et qualité", "Marketing stratégique", "Comportement du consommateur", "Gestion des ressources humaines", "Statistiques appliquées", "Français & Anglais", "Compétences digitales et informatique"
-            ],
-            "Semester 2": [
-                "Analyse des données", "Marketing opérationnel", "Etude de marché", "Marketing digital et développement Web", "Algorithmes et Programmation Python", "Français & Anglais", "Responsabilité sociétale"
-            ]
-        }
-    },
-    "CGE4": {
-        "Gestion": {
-            "Finance": {
-                "Semester 1": ["Management stratégique", "Evaluation des entreprises", "Finance internationale", "Stage d’approfondissement", "Français & Anglais", "Intelligence artificielle"],
-                "Semester 2": ["Simulation de gestion et ERP", "Ingénierie financière", "Audit et gestion des risques financiers", "Stratégies financières", "IA appliquée Fintech", "Français & Anglais", "Employment skills"]
-            },
-            "Audit": {
-                "Semester 1": ["Management stratégique", "Contrôle de gestion avancé", "Audit opérationnel", "Stage d’approfondissement", "Français & Anglais", "Intelligence artificielle"],
-                "Semester 2": ["Simulation de gestion et ERP", "Audit comptable et fiscal", "Audit et optimisation", "Fusions et acquisitions", "IA appliquée ", "Français & Anglais", "Employment skills"]
-            }
-        },
-        "Commerce": {
-            "Marketing": {
-                "Semester 1": ["Management stratégique", "CRM et Branding", "Marketing stratégique", "Stage d’approfondissement", "Français & Anglais", "Digital competences"],
-                "Semester 2": ["ERP Simulation", "Digital marketing avancé", "Marketing analytique", "Merchandising avancé", "Employment Skills"]
-            }
-        }
     }
 }
+
+@app.route('/start', methods=['GET'])
+def start():
+    return jsonify({
+        "message": "Welcome to the Grade Validator App! Please select your year:",
+        "options": ["CP1 (1st Year)", "CP2 (2nd Year)", "CGE3 (3rd Year)", "CGE4 (4th Year)", "CGE5 (5th Year)"]
+    })
+
+@app.route('/modules', methods=['POST'])
+def modules():
+    data = request.get_json()
+    year = data.get('year')
+    semester = data.get('semester')
+
+    try:
+        modules = MODULES[year][semester]
+        return jsonify({
+            "message": "Please enter the grades for the following modules:",
+            "modules": modules
+        })
+    except KeyError:
+        return jsonify({"error": "Invalid year or semester."}), 400
 
 @app.route('/validate', methods=['POST'])
 def validate_grades():
@@ -66,14 +58,74 @@ def validate_grades():
 
     year = data.get('year')
     semester = data.get('semester')
-    specialization = data.get('specialization', None)
     grades = data.get('grades', {})
 
-    # Handle specialization validation
-    if year.startswith('CGE') and specialization not in MODULES[year]:
-        return jsonify({"error": "Invalid specialization."}), 400
-
     try:
-        module_list = MODULES[year]
+        module_list = MODULES[year][semester]
     except KeyError:
-        return jsonify({"error": "Invalid semester or year."}), 400
+        return jsonify({"error": "Invalid year or semester."}), 400
+
+    min_eliminatory = 6 if year.startswith("CP") else 8
+    compensation_range = (6, 10) if year.startswith("CP") else (8, 10)
+
+    total_grades = 0
+    validated_modules = []
+    compensatable_modules = []
+    failed_modules = []
+
+    for module in module_list:
+        if module not in grades:
+            return jsonify({"error": f"Missing grades for module: {module}"}), 400
+
+        cc = grades[module].get('cc', 0)
+        exam = grades[module].get('exam', 0)
+        rattrapage = grades[module].get('rattrapage', False)
+        final_grade = (cc * 0.5) + (exam * 0.5)
+
+        if rattrapage:
+            if final_grade < min_eliminatory:
+                failed_modules.append(module)
+            elif compensation_range[0] <= final_grade < 10:
+                compensatable_modules.append(module)
+            else:
+                validated_modules.append(module)
+        else:
+            if final_grade < min_eliminatory:
+                failed_modules.append(module)
+            elif compensation_range[0] <= final_grade < 10:
+                compensatable_modules.append(module)
+            else:
+                validated_modules.append(module)
+
+        total_grades += final_grade
+
+    average = total_grades / len(module_list)
+    semester_validated = average >= 10 and len(failed_modules) == 0
+
+    honors = None
+    if semester_validated:
+        if average >= 16:
+            honors = "Très bien"
+        elif average >= 14:
+            honors = "Bien"
+        elif average >= 12:
+            honors = "Assez bien"
+        elif average >= 10:
+            honors = "Passable"
+
+    result = {
+        "validated_modules": validated_modules,
+        "compensatable_modules": compensatable_modules,
+        "failed_modules": failed_modules,
+        "average": average,
+        "semester_validated": semester_validated,
+        "honors": honors,
+    }
+
+    return jsonify(result)
+
+# Correct Port Binding Logic for Render
+if __name__ == '__main__':
+    import os
+    port = int(os.environ.get("PORT", 5000))  # Render dynamically assigns a port
+    app.run(host="0.0.0.0", port=port, debug=True)
