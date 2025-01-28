@@ -1,7 +1,9 @@
+from flask_cors import CORS
+
 from flask import Flask, request, jsonify
 
 app = Flask(__name__)
-
+CORS(app)
 # Predefined modules by level, specialization, and semester
 MODULES = {
     "CP": {
