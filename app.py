@@ -4,6 +4,18 @@ from flask_cors import CORS
 app = Flask(__name__)
 CORS(app)
 
+@app.route("/")
+def home():
+    return "Backend is running!"
+
+@app.route("/module")
+def module():
+    return jsonify({"message": "Module route is working!"})
+
+@app.route("/start")
+def start():
+    return jsonify({"message": "Start route is working!"})
+
 # Predefined modules by year, specialization, and semester
 MODULES = {
     "CP1": {
@@ -181,8 +193,10 @@ def validate():
 
     except KeyError:
         return jsonify({"error": "Invalid data provided."}), 400
+print(app.url_map)
 
 if __name__ == '__main__':
-    import os
-    port = int(os.environ.get("PORT", 5000))
-    app.run(host="0.0.0.0", port=port, debug=True)
+import os
+
+port = int(os.environ.get("PORT", 10000))  # Render assigns PORT dynamically
+app.run(host="0.0.0.0", port=port, debug=True)
