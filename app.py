@@ -193,10 +193,10 @@ def validate():
 
     except KeyError:
         return jsonify({"error": "Invalid data provided."}), 400
-print(app.url_map)
+
 
 if __name__ == '__main__':
-import os
+    import os
+    port = int(os.environ.get("PORT", 5000))  # Ensure PORT is set correctly
+    app.run(host="0.0.0.0", port=port, debug=True)  # Indented correctly
 
-port = int(os.environ.get("PORT", 10000))  # Render assigns PORT dynamically
-app.run(host="0.0.0.0", port=port, debug=True)
